@@ -67,9 +67,9 @@
 
     .tile {
       position: absolute;
-      left: 5px;
-      width: calc(100% - 10px);
-      height: 135px;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 170px;
       background: linear-gradient(180deg, #111 0%, #000 100%);
       border-radius: 10px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.3);
@@ -164,7 +164,7 @@
     }
 
     #statusText {
-      min-height: 22px;
+      min-height: 24px;
       margin-top: 14px;
       color: #0b2f4a;
       font-weight: bold;
@@ -196,6 +196,7 @@
       h1 { font-size: 28px; }
       .value { font-size: 18px; }
       #feedback { font-size: 24px; }
+      .tile { height: 155px; }
     }
   </style>
 </head>
@@ -227,7 +228,7 @@
     <div id="menu">
       <div id="card">
         <h1>Magic Tiles Extreme</h1>
-        <p>Touch pe coloană • Dacă ratezi o singură tilă, jocul se termină.</p>
+        <p>Touch pe coloană • Dacă ratezi o tilă, jocul se termină.</p>
         <button id="startBtn">START</button>
         <button id="restartBtn">RESTART</button>
         <div id="statusText">Pregătit</div>
@@ -260,18 +261,19 @@
     let gameOver = false;
     let animationId = null;
     let spawnTimeout = null;
+    let endTimeout = null;
     let lastFrame = 0;
     let tiles = [];
 
-    const tileHeight = 135;
+    const tileHeight = 170;
     const hitLineBottom = 110;
-    const speedPxPerSecond = 1150;
-    const earlyHitWindowPx = 360;
-    const perfectWindowPx = 85;
-    const goodWindowPx = 180;
-    const lateMissWindowPx = 55;
-    const minSpawnMs = 140;
-    const maxSpawnMs = 220;
+    const speedPxPerSecond = 980;
+    const earlyHitWindowPx = 420;
+    const perfectWindowPx = 95;
+    const goodWindowPx = 220;
+    const lateMissWindowPx = 120;
+    const minSpawnMs = 180;
+    const maxSpawnMs = 270;
 
     function rand(min, max) {
       return Math.random() * (max - min) + min;
@@ -305,7 +307,7 @@
       clearTimeout(showFeedback._timeout);
       showFeedback._timeout = setTimeout(() => {
         feedback.classList.remove("show");
-      }, 160);
+      }, 220);
     }
 
     function removeTile(tile) {
@@ -335,10 +337,15 @@
       combo = 0;
       maxCombo = 0;
       lastFrame = 0;
+
       if (animationId) cancelAnimationFrame(animationId);
       if (spawnTimeout) clearTimeout(spawnTimeout);
+      if (endTimeout) clearTimeout(endTimeout);
+
       animationId = null;
       spawnTimeout = null;
+      endTimeout = null;
+
       clearAllTiles();
       music.pause();
       music.currentTime = 0;
@@ -362,21 +369,27 @@
     }
 
     function spawnLoop() {
-      if (!running) return;
+      if (!running || gameOver) return;
       createTile(randomLane());
       spawnTimeout = setTimeout(spawnLoop, rand(minSpawnMs, maxSpawnMs));
     }
 
-    function endGame(reason = "GAME OVER") {
+    function showRestartMenuDelayed(reason = "GAME OVER") {
       if (gameOver) return;
-      running = false;
       gameOver = true;
+      running = false;
+
       if (animationId) cancelAnimationFrame(animationId);
       if (spawnTimeout) clearTimeout(spawnTimeout);
-      music.pause();
+
       showFeedback(reason);
-      statusText.textContent = "Final! Scor: " + score + " | Combo maxim: " + maxCombo;
-      menu.style.display = "flex";
+      statusText.textContent = "Ai pierdut. Restart în 3 secunde...";
+      music.pause();
+
+      endTimeout = setTimeout(() => {
+        statusText.textContent = "Final! Scor: " + score + " | Combo maxim: " + maxCombo;
+        menu.style.display = "flex";
+      }, 3000);
     }
 
     function bestTileInLane(laneIndex) {
@@ -386,8 +399,10 @@
 
       for (const tile of tiles) {
         if (!tile.active || tile.lane !== laneIndex) continue;
+
         const bottom = tile.y + tile.h;
         const canHit = bottom >= hitY - earlyHitWindowPx && bottom <= hitY + lateMissWindowPx;
+
         if (!canHit) continue;
 
         const diff = Math.abs(bottom - hitY);
@@ -396,6 +411,7 @@
           bestDiff = diff;
         }
       }
+
       return best;
     }
 
@@ -408,7 +424,7 @@
       const tile = bestTileInLane(index);
 
       if (!tile) {
-        endGame("MISS");
+        showRestartMenuDelayed("MISS");
         return;
       }
 
@@ -435,7 +451,7 @@
     }
 
     function update(ts) {
-      if (!running) return;
+      if (!running || gameOver) return;
       if (!lastFrame) lastFrame = ts;
 
       const dt = (ts - lastFrame) / 1000;
@@ -453,7 +469,7 @@
         const bottom = tile.y + tile.h;
 
         if (bottom > hitY + lateMissWindowPx) {
-          endGame("MISS");
+          showRestartMenuDelayed("MISS");
           return;
         }
       }
@@ -483,7 +499,16 @@
       animationId = requestAnimationFrame(update);
 
       music.onended = () => {
-        endGame("FINISH");
+        if (!gameOver) {
+          gameOver = true;
+          running = false;
+          if (animationId) cancelAnimationFrame(animationId);
+          if (spawnTimeout) clearTimeout(spawnTimeout);
+          statusText.textContent = "Piesa s-a terminat!";
+          endTimeout = setTimeout(() => {
+            menu.style.display = "flex";
+          }, 3000);
+        }
       };
     }
 
