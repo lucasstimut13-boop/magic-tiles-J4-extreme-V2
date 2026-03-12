@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Magic Tiles Extreme</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(180deg, #8fdcff 0%, #bfeeff 50%, #e8fbff 100%);
+    }
+
+    body {
+      position: relative;
+    }
+
+    #game {
+      position: relative;
+      width: min(100vw, 520px);
+      height: 100vh;
+      margin: 0 auto;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.06);
+    }
+
+    .lane {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 25%;
+      border-left: 1px solid rgba(0, 0, 0, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    #lane0 { left: 0; }
+    #lane1 { left: 25%; }
+    #lane2 { left: 50%; }
+    #lane3 { left: 75%; }
+
+    .laneFlash {
+      background: rgba(255,255,255,0.15);
+    }
+
+    #hitLine {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 110px;
+      height: 6px;
+      background: rgba(255,255,255,0.95);
+      box-shadow: 0 0 16px rgba(255,255,255,0.9);
+      z-index: 5;
+    }
+
+    .tile {
+      position: absolute;
+      left: 5px;
+      width: calc(100% - 10px);
+      height: 135px;
+      background: linear-gradient(180deg, #111 0%, #000 100%);
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .box {
+      min-width: 90px;
+      text-align: center;
+      background: rgba(255,255,255,0.78);
+      color: #0b2f4a;
+      border-radius: 14px;
+      padding: 10px 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+      pointer-events: auto;
+    }
+
+    .label {
+      font-size: 12px;
+      opacity: 0.75;
+      margin-bottom: 4px;
+    }
+
+    .value {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    #menu {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(180, 234, 255, 0.35);
+      backdrop-filter: blur(6px);
+    }
+
+    #card {
+      width: min(92vw, 420px);
+      background: rgba(255,255,255,0.86);
+      border-radius: 20px;
+      padding: 24px 18px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.12);
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      color: #0b2f4a;
+    }
+
+    p {
+      color: #245879;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    #startBtn {
+      color: white;
+      background: linear-gradient(180deg, #1b8cff, #006ce0);
+    }
+
+    #restartBtn {
+      color: #0b2f4a;
+      background: linear-gradient(180deg, #ffffff, #eaf6ff);
+      border: 1px solid rgba(11,47,74,0.1);
+    }
+
+    #statusText {
+      min-height: 22px;
+      margin-top: 14px;
+      color: #0b2f4a;
+      font-weight: bold;
+    }
+
+    #feedback {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 180px;
+      z-index: 25;
+      text-align: center;
+      font-size: 30px;
+      font-weight: 800;
+      color: white;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: 0.15s ease;
+      pointer-events: none;
+    }
+
+    #feedback.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 28px; }
+      .value { font-size: 18px; }
+      #feedback { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div id="lane0" class="lane" data-lane="0"></div>
+    <div id="lane1" class="lane" data-lane="1"></div>
+    <div id="lane2" class="lane" data-lane="2"></div>
+    <div id="lane3" class="lane" data-lane="3"></div>
+    <div id="hitLine"></div>
+
+    <div id="ui">
+      <div class="box">
+        <div class="label">SCOR</div>
+        <div id="scoreValue" class="value">0</div>
+      </div>
+      <div class="box">
+        <div class="label">COMBO</div>
+        <div id="comboValue" class="value">0</div>
+      </div>
+      <div class="box">
+        <div class="label">MAX</div>
+        <div id="maxComboValue" class="value">0</div>
+      </div>
+    </div>
+
+    <div id="feedback"></div>
+
+    <div id="menu">
+      <div id="card">
+        <h1>Magic Tiles Extreme</h1>
+        <p>Touch pe coloană • Dacă ratezi o singură tilă, jocul se termină.</p>
+        <button id="startBtn">START</button>
+        <button id="restartBtn">RESTART</button>
+        <div id="statusText">Pregătit</div>
+        <p>Fișierul audio trebuie să aibă exact numele:<br><b>AUDIO-2026-02-21-18-41-33.mp3.mpeg</b></p>
+      </div>
+    </div>
+
+    <audio id="music" preload="auto"></audio>
+  </div>
+
+  <script>
+    const AUDIO_FILE = "AUDIO-2026-02-21-18-41-33.mp3.mpeg";
+
+    const game = document.getElementById("game");
+    const lanes = [...document.querySelectorAll(".lane")];
+    const startBtn = document.getElementById("startBtn");
+    const restartBtn = document.getElementById("restartBtn");
+    const menu = document.getElementById("menu");
+    const statusText = document.getElementById("statusText");
+    const scoreValue = document.getElementById("scoreValue");
+    const comboValue = document.getElementById("comboValue");
+    const maxComboValue = document.getElementById("maxComboValue");
+    const feedback = document.getElementById("feedback");
+    const music = document.getElementById("music");
+
+    let score = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let running = false;
+    let gameOver = false;
+    let animationId = null;
+    let spawnTimeout = null;
+    let lastFrame = 0;
+    let tiles = [];
+
+    const tileHeight = 135;
+    const hitLineBottom = 110;
+    const speedPxPerSecond = 1150;
+    const earlyHitWindowPx = 360;
+    const perfectWindowPx = 85;
+    const goodWindowPx = 180;
+    const lateMissWindowPx = 55;
+    const minSpawnMs = 140;
+    const maxSpawnMs = 220;
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function randomLane() {
+      return Math.floor(Math.random() * 4);
+    }
+
+    function gameHeight() {
+      return game.clientHeight;
+    }
+
+    function updateUI() {
+      scoreValue.textContent = score;
+      comboValue.textContent = combo;
+      maxComboValue.textContent = maxCombo;
+    }
+
+    function flashLane(index) {
+      lanes[index].classList.add("laneFlash");
+      clearTimeout(flashLane["t" + index]);
+      flashLane["t" + index] = setTimeout(() => {
+        lanes[index].classList.remove("laneFlash");
+      }, 70);
+    }
+
+    function showFeedback(text) {
+      feedback.textContent = text;
+      feedback.classList.add("show");
+      clearTimeout(showFeedback._timeout);
+      showFeedback._timeout = setTimeout(() => {
+        feedback.classList.remove("show");
+      }, 160);
+    }
+
+    function removeTile(tile) {
+      tile.active = false;
+      if (tile.el && tile.el.parentNode) {
+        tile.el.parentNode.removeChild(tile.el);
+      }
+      const i = tiles.indexOf(tile);
+      if (i !== -1) {
+        tiles.splice(i, 1);
+      }
+    }
+
+    function clearAllTiles() {
+      for (const tile of tiles) {
+        if (tile.el && tile.el.parentNode) {
+          tile.el.parentNode.removeChild(tile.el);
+        }
+      }
+      tiles = [];
+    }
+
+    function resetGame() {
+      running = false;
+      gameOver = false;
+      score = 0;
+      combo = 0;
+      maxCombo = 0;
+      lastFrame = 0;
+      if (animationId) cancelAnimationFrame(animationId);
+      if (spawnTimeout) clearTimeout(spawnTimeout);
+      animationId = null;
+      spawnTimeout = null;
+      clearAllTiles();
+      music.pause();
+      music.currentTime = 0;
+      updateUI();
+    }
+
+    function createTile(laneIndex) {
+      const lane = lanes[laneIndex];
+      const el = document.createElement("div");
+      el.className = "tile";
+      el.style.top = (-tileHeight) + "px";
+      lane.appendChild(el);
+
+      tiles.push({
+        lane: laneIndex,
+        y: -tileHeight,
+        h: tileHeight,
+        el,
+        active: true
+      });
+    }
+
+    function spawnLoop() {
+      if (!running) return;
+      createTile(randomLane());
+      spawnTimeout = setTimeout(spawnLoop, rand(minSpawnMs, maxSpawnMs));
+    }
+
+    function endGame(reason = "GAME OVER") {
+      if (gameOver) return;
+      running = false;
+      gameOver = true;
+      if (animationId) cancelAnimationFrame(animationId);
+      if (spawnTimeout) clearTimeout(spawnTimeout);
+      music.pause();
+      showFeedback(reason);
+      statusText.textContent = "Final! Scor: " + score + " | Combo maxim: " + maxCombo;
+      menu.style.display = "flex";
+    }
+
+    function bestTileInLane(laneIndex) {
+      const hitY = gameHeight() - hitLineBottom;
+      let best = null;
+      let bestDiff = Infinity;
+
+      for (const tile of tiles) {
+        if (!tile.active || tile.lane !== laneIndex) continue;
+        const bottom = tile.y + tile.h;
+        const canHit = bottom >= hitY - earlyHitWindowPx && bottom <= hitY + lateMissWindowPx;
+        if (!canHit) continue;
+
+        const diff = Math.abs(bottom - hitY);
+        if (diff < bestDiff) {
+          best = tile;
+          bestDiff = diff;
+        }
+      }
+      return best;
+    }
+
+    function hitLane(index) {
+      if (!running || gameOver) return;
+
+      flashLane(index);
+
+      const hitY = gameHeight() - hitLineBottom;
+      const tile = bestTileInLane(index);
+
+      if (!tile) {
+        endGame("MISS");
+        return;
+      }
+
+      const bottom = tile.y + tile.h;
+      const diff = Math.abs(bottom - hitY);
+
+      if (diff <= perfectWindowPx) {
+        score += 20;
+        combo += 1;
+        showFeedback("PERFECT");
+      } else if (diff <= goodWindowPx || bottom < hitY) {
+        score += 10;
+        combo += 1;
+        showFeedback("GOOD");
+      } else {
+        score += 8;
+        combo += 1;
+        showFeedback("EARLY");
+      }
+
+      if (combo > maxCombo) maxCombo = combo;
+      updateUI();
+      removeTile(tile);
+    }
+
+    function update(ts) {
+      if (!running) return;
+      if (!lastFrame) lastFrame = ts;
+
+      const dt = (ts - lastFrame) / 1000;
+      lastFrame = ts;
+
+      const hitY = gameHeight() - hitLineBottom;
+
+      for (let i = tiles.length - 1; i >= 0; i--) {
+        const tile = tiles[i];
+        if (!tile.active) continue;
+
+        tile.y += speedPxPerSecond * dt;
+        tile.el.style.top = tile.y + "px";
+
+        const bottom = tile.y + tile.h;
+
+        if (bottom > hitY + lateMissWindowPx) {
+          endGame("MISS");
+          return;
+        }
+      }
+
+      animationId = requestAnimationFrame(update);
+    }
+
+    async function startGame() {
+      resetGame();
+      menu.style.display = "none";
+      running = true;
+      statusText.textContent = "Rulează";
+
+      try {
+        music.src = AUDIO_FILE;
+        music.load();
+        music.volume = 1;
+        music.currentTime = 0;
+        await music.play();
+        statusText.textContent = "Melodia a pornit";
+      } catch (err) {
+        statusText.textContent = "Audio nu pornește. Verifică numele fișierului.";
+        console.log(err);
+      }
+
+      spawnLoop();
+      animationId = requestAnimationFrame(update);
+
+      music.onended = () => {
+        endGame("FINISH");
+      };
+    }
+
+    function restartGame() {
+      resetGame();
+      menu.style.display = "flex";
+      statusText.textContent = "Resetat";
+    }
+
+    lanes.forEach((lane, index) => {
+      lane.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        hitLane(index);
+      });
+
+      lane.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        hitLane(index);
+      }, { passive: false });
+
+      lane.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        hitLane(index);
+      });
+    });
+
+    startBtn.addEventListener("click", startGame);
+    restartBtn.addEventListener("click", restartGame);
+
+    updateUI();
+  </script>
+</body>
+</html>
