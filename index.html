@@ -1,6 +1,4 @@
-
-<!
-    function randomLaDOCTYPE html>
+<!DOCTYPE html>
 <html lang="ro">
 <head>
   <meta charset="UTF-8" />
@@ -26,6 +24,7 @@
 
     body {
       position: relative;
+      touch-action: manipulation;
     }
 
     #game {
@@ -75,6 +74,46 @@
       background: linear-gradient(180deg, #111 0%, #000 100%);
       border-radius: 10px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      z-index: 3;
+    }
+
+    .ghostMiss {
+      position: absolute;
+      left: 4px;
+      width: calc(100% - 8px);
+      height: 170px;
+      border-radius: 10px;
+      background: rgba(255, 145, 0, 0.7);
+      box-shadow: 0 0 18px rgba(255,145,0,0.45);
+      z-index: 4;
+      pointer-events: none;
+      animation: ghostFade 0.28s ease forwards;
+    }
+
+    @keyframes ghostFade {
+      0% { opacity: 0.95; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.98); }
+    }
+
+    #edgeFlash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 12;
+      opacity: 0;
+      transition: opacity 0.16s ease;
+      background:
+        linear-gradient(90deg,
+          rgba(255,0,0,0.16) 0%,
+          rgba(255,0,0,0.06) 6%,
+          rgba(255,0,0,0.00) 14%,
+          rgba(255,0,0,0.00) 86%,
+          rgba(255,0,0,0.06) 94%,
+          rgba(255,0,0,0.16) 100%);
+    }
+
+    #edgeFlash.show {
+      opacity: 1;
     }
 
     #ui {
@@ -198,7 +237,7 @@
       h1 { font-size: 28px; }
       .value { font-size: 18px; }
       #feedback { font-size: 24px; }
-      .tile { height: 155px; }
+      .tile, .ghostMiss { height: 155px; }
     }
   </style>
 </head>
@@ -209,6 +248,7 @@
     <div id="lane2" class="lane" data-lane="2"></div>
     <div id="lane3" class="lane" data-lane="3"></div>
     <div id="hitLine"></div>
+    <div id="edgeFlash"></div>
 
     <div id="ui">
       <div class="box">
@@ -230,7 +270,7 @@
     <div id="menu">
       <div id="card">
         <h1>Magic Tiles Extreme</h1>
-        <p>Touch pe coloană • Dacă ratezi o tilă, jocul se termină.</p>
+        <p>MISS doar când apeși total pe lângă sau când o tilă trece clar de zona de hit.</p>
         <button id="startBtn">START</button>
         <button id="restartBtn">RESTART</button>
         <div id="statusText">Pregătit</div>
@@ -255,6 +295,7 @@
     const maxComboValue = document.getElementById("maxComboValue");
     const feedback = document.getElementById("feedback");
     const music = document.getElementById("music");
+    const edgeFlash = document.getElementById("edgeFlash");
 
     let score = 0;
     let combo = 0;
@@ -266,22 +307,32 @@
     let endTimeout = null;
     let lastFrame = 0;
     let tiles = [];
+    let lastSpawnLane = -1;
 
     const tileHeight = 170;
     const hitLineBottom = 110;
-    const speedPxPerSecond = 980;
-    const earlyHitWindowPx = 420;
-    const perfectWindowPx = 95;
-    const goodWindowPx = 220;
-    const lateMissWindowPx = 120;
-    const minSpawnMs = 180;
-    const maxSpawnMs = 270;
+    const speedPxPerSecond = 900;
+    const earlyHitWindowPx = 760;
+    const perfectWindowPx = 125;
+    const goodWindowPx = 320;
+    const lateMissWindowPx = 220;
+    const missAfterFullTilePastPx = 70;
+
+    // spațiul dintre note ~ mărimea unei tile
+    const minSpawnMs = 360;
+    const maxSpawnMs = 430;
 
     function rand(min, max) {
       return Math.random() * (max - min) + min;
     }
-ne() {
-      return Math.floor(Math.random() * 4);
+
+    function randomLane() {
+      let lane = Math.floor(Math.random() * 4);
+      if (lane === lastSpawnLane) {
+        lane = (lane + 1 + Math.floor(Math.random() * 3)) % 4;
+      }
+      lastSpawnLane = lane;
+      return lane;
     }
 
     function gameHeight() {
@@ -302,6 +353,14 @@ ne() {
       }, 70);
     }
 
+    function flashEdges() {
+      edgeFlash.classList.add("show");
+      clearTimeout(flashEdges._t);
+      flashEdges._t = setTimeout(() => {
+        edgeFlash.classList.remove("show");
+      }, 140);
+    }
+
     function showFeedback(text) {
       feedback.textContent = text;
       feedback.classList.add("show");
@@ -311,15 +370,25 @@ ne() {
       }, 220);
     }
 
+    function spawnGhostMiss(laneIndex) {
+      const lane = lanes[laneIndex];
+      const ghost = document.createElement("div");
+      ghost.className = "ghostMiss";
+      ghost.style.top = (gameHeight() - hitLineBottom - tileHeight / 2) + "px";
+      lane.appendChild(ghost);
+
+      setTimeout(() => {
+        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      }, 280);
+    }
+
     function removeTile(tile) {
       tile.active = false;
       if (tile.el && tile.el.parentNode) {
         tile.el.parentNode.removeChild(tile.el);
       }
       const i = tiles.indexOf(tile);
-      if (i !== -1) {
-        tiles.splice(i, 1);
-      }
+      if (i !== -1) tiles.splice(i, 1);
     }
 
     function clearAllTiles() {
@@ -338,6 +407,7 @@ ne() {
       combo = 0;
       maxCombo = 0;
       lastFrame = 0;
+      lastSpawnLane = -1;
 
       if (animationId) cancelAnimationFrame(animationId);
       if (spawnTimeout) clearTimeout(spawnTimeout);
@@ -396,24 +466,53 @@ ne() {
     function bestTileInLane(laneIndex) {
       const hitY = gameHeight() - hitLineBottom;
       let best = null;
-      let bestDiff = Infinity;
+      let bestScore = -999999;
 
       for (const tile of tiles) {
         if (!tile.active || tile.lane !== laneIndex) continue;
 
+        const top = tile.y;
         const bottom = tile.y + tile.h;
-        const canHit = bottom >= hitY - earlyHitWindowPx && bottom <= hitY + lateMissWindowPx;
 
-        if (!canHit) continue;
+        const visibleOnScreen = bottom > 0 && top < gameHeight();
+        if (!visibleOnScreen) continue;
 
-        const diff = Math.abs(bottom - hitY);
-        if (diff < bestDiff) {
+        const insideBigHitWindow =
+          bottom >= hitY - earlyHitWindowPx &&
+          top <= hitY + lateMissWindowPx;
+
+        if (!insideBigHitWindow) continue;
+
+        const center = top + tile.h / 2;
+        const dist = Math.abs(center - hitY);
+
+        const scoreCandidate = 10000 - dist;
+        if (scoreCandidate > bestScore) {
+          bestScore = scoreCandidate;
           best = tile;
-          bestDiff = diff;
         }
       }
 
       return best;
+    }
+
+    function hasNearbyTileInAnyLane() {
+      const hitY = gameHeight() - hitLineBottom;
+
+      for (const tile of tiles) {
+        if (!tile.active) continue;
+
+        const top = tile.y;
+        const bottom = tile.y + tile.h;
+
+        const somewhatNear =
+          bottom >= hitY - earlyHitWindowPx &&
+          top <= hitY + lateMissWindowPx;
+
+        if (somewhatNear) return true;
+      }
+
+      return false;
     }
 
     function hitLane(index) {
@@ -425,18 +524,25 @@ ne() {
       const tile = bestTileInLane(index);
 
       if (!tile) {
-        showRestartMenuDelayed("MISS");
+        // MISS doar dacă nu există nicio tilă apropiată deloc.
+        if (!hasNearbyTileInAnyLane()) {
+          combo = 0;
+          updateUI();
+          spawnGhostMiss(index);
+          flashEdges();
+          showFeedback("MISS");
+        }
         return;
       }
 
-      const bottom = tile.y + tile.h;
-      const diff = Math.abs(bottom - hitY);
+      const center = tile.y + tile.h / 2;
+      const diff = Math.abs(center - hitY);
 
       if (diff <= perfectWindowPx) {
         score += 20;
         combo += 1;
         showFeedback("PERFECT");
-      } else if (diff <= goodWindowPx || bottom < hitY) {
+      } else if (diff <= goodWindowPx) {
         score += 10;
         combo += 1;
         showFeedback("GOOD");
@@ -467,9 +573,15 @@ ne() {
         tile.y += speedPxPerSecond * dt;
         tile.el.style.top = tile.y + "px";
 
+        const top = tile.y;
         const bottom = tile.y + tile.h;
 
-        if (bottom > hitY + lateMissWindowPx) {
+        if (top > hitY + lateMissWindowPx + missAfterFullTilePastPx) {
+          showRestartMenuDelayed("MISS");
+          return;
+        }
+
+        if (bottom > gameHeight() + tile.h) {
           showRestartMenuDelayed("MISS");
           return;
         }
@@ -542,3 +654,4 @@ ne() {
     updateUI();
   </script>
 </body>
+</html>
